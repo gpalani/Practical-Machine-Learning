@@ -1,0 +1,102 @@
+---
+title: "Pratical Machine Learning Course Project"
+author: "gpalani"
+date: "January 31, 2016"
+output: html_document
+---
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Question
+Predict the manner in which the participants exercise. 
+
+The question being asked defines our model and how we can set up the model and predict it, then test it and see if we can validate it accurately. The template ofcourse has been laid out i.e. ask the questions, get the input data, define the features that can predict , create the model(algorithm) and evalute it.
+
+Dumbbell Biceps Curl in five different fashions: 
+1. exactly according to the specification (Class A)
+2. throwing the elbows to the front (Class B) 
+3. lifting the dumbbell only halfway (Class C)
+4. lowering the dumbbell only halfway (Class D) 
+5. throwing the hips to the front (Class E)
+
+
+### Loading the data from the provided URL 
+
+```{r,warning=FALSE,error=FALSE,message=FALSE}
+library(caret)
+traindataURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testdataURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training <- read.csv(url(traindataURL), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testdataURL), na.strings=c("NA","#DIV/0!",""))
+```
+
+Doing some preprocessing to increase the data quality. Removing zero covariates.
+
+```{r}
+#Cleaning the variable
+NAindex <- apply(training,2,function(x) {sum(is.na(x))}) 
+training <- training[,which(NAindex == 0)]
+NAindex <- apply(testing,2,function(x) {sum(is.na(x))}) 
+testing <- testing[,which(NAindex == 0)]
+
+#Preprocessing Variables
+
+i <- which(lapply(training, class) %in% "numeric")
+preObj <-preProcess(training[,i],method=c('knnImpute', 'center', 'scale'))
+trainingSet <- predict(preObj, training[,i])
+trainingSet$classe <- training$classe
+testSet <-predict(preObj,testing[,i])
+```
+Removing near Zero varible that increases the prediction ability. We do this on both the training and test data partitions.
+
+```{r,warning=FALSE,error=FALSE,message=FALSE}
+# Remove nonZero variables
+nzv_training <- nearZeroVar(trainingSet, saveMetrics=TRUE)
+trainingSet <- trainingSet[,nzv_training$nzv==FALSE]
+nzv_testing <- nearZeroVar(testSet, saveMetrics=TRUE)
+testSet  <- testSet[,nzv_testing$nzv==FALSE]
+```
+
+We use the createDataPartiton to divide the training and test data. I use 75% split for the training data/test data split.
+
+```{r,warning=FALSE,error=FALSE,message=FALSE}
+set.seed(343435)
+inTrain <- createDataPartition(trainingSet$classe, p =.75, list = FALSE)
+# Splitting the data
+exer_training_data <- trainingSet[inTrain,]
+exer_testing_data <- testSet[-inTrain,]
+```
+
+## Model
+
+The model choosen is the random forest method for getting the best possible predictability. 
+
+```{r,warning=FALSE,error=FALSE,message=FALSE}
+modelFit <- train(classe ~. ,data = exer_training_data,method = "rf", trControl=trainControl(method='cv'), number=5, allowParallel=TRUE )
+modelFit
+```
+
+Check the accuracy of the training data 
+
+```{r,warning=FALSE}
+trainingPred <- predict(modelFit, exer_training_data)
+confusionMatrix(trainingPred,exer_training_data$classe)
+```
+
+Now run the prediction on the partition test data. 
+
+```{r}
+#testPred<- predict(modelFit, exer_testing_data)
+#confusionMatrix(testPred,exer_testing_data$classe)
+```
+
+## RESULTS
+
+Run the prediction on the actual test data 
+
+```{r,warning=FALSE}
+classeTest<- predict(modelFit, testSet)
+classeTest
+```
